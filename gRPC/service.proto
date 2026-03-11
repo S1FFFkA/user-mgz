@@ -1,0 +1,181 @@
+syntax = "proto3";
+
+package user.v1;
+
+option go_package = "github.com/S1FFFkA/user-mgz/pkg/api/user/v1;userv1";
+
+import "google/protobuf/timestamp.proto";
+
+enum Sex {
+  SEX_UNSPECIFIED = 0;
+  SEX_MALE = 1;
+  SEX_FEMALE = 2;
+}
+
+enum PhotoType {
+  PHOTO_TYPE_UNSPECIFIED = 0;
+  PHOTO_TYPE_PRIMARY = 1;
+  PHOTO_TYPE_EXTRA = 2;
+}
+
+message City {
+  int64 id = 1;
+  string name = 2;
+}
+
+message UserPhoto {
+  int64 id = 1;
+  string object_key = 2;
+  string url = 3;
+  int32 position = 4; // 1..6 (only additional photos).
+}
+
+message User {
+  string id = 1; // UUIDv7
+  string first_name = 2;
+  string last_name = 3;
+  string email = 4;
+  string birth_date = 5; // RFC3339 date-only format (YYYY-MM-DD).
+  string bio = 6;
+  int32 toiler_score = 7; // 1..10
+  string alcohol_info = 8;
+  string smoking_info = 9;
+  Sex sex = 10;
+  int32 height_cm = 11;
+  City city = 12;
+  string primary_photo_object_key = 13;
+  string primary_photo_url = 14;
+  repeated UserPhoto extra_photos = 15;
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+}
+
+message CreateUserRequest {
+  string first_name = 1;
+  string last_name = 2;
+  string email = 3;
+  string birth_date = 4; // YYYY-MM-DD
+  string bio = 5;
+  int32 toiler_score = 6;
+  string alcohol_info = 7;
+  string smoking_info = 8;
+  Sex sex = 9;
+  int32 height_cm = 10;
+  int64 city_id = 11;
+  string primary_photo_object_key = 12;
+  string primary_photo_url = 13;
+  repeated NewUserPhoto extra_photos = 14; // max 6
+}
+
+message NewUserPhoto {
+  string object_key = 1;
+  string url = 2;
+  int32 position = 3; // 1..6
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message GetUserRequest {
+  string user_id = 1; // UUIDv7
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message UpdateUserRequest {
+  string user_id = 1; // UUIDv7
+  optional string first_name = 2;
+  optional string last_name = 3;
+  optional string email = 4;
+  optional string birth_date = 5;
+  optional string bio = 6;
+  optional int32 toiler_score = 7;
+  optional string alcohol_info = 8;
+  optional string smoking_info = 9;
+  optional Sex sex = 10;
+  optional int32 height_cm = 11;
+  optional int64 city_id = 12;
+  optional string primary_photo_object_key = 13;
+  optional string primary_photo_url = 14;
+  repeated NewUserPhoto extra_photos = 15; // Replace additional photos list.
+}
+
+message UpdateUserResponse {
+  User user = 1;
+}
+
+message DeleteUserRequest {
+  string user_id = 1; // UUIDv7
+}
+
+message DeleteUserResponse {}
+
+message ListUsersRequest {
+  int32 limit = 1; // default 20
+  int32 offset = 2;
+  int64 city_id = 3; // optional, if 0 - no filter
+}
+
+message ListUsersResponse {
+  repeated User users = 1;
+}
+
+message GetUserPhotoUploadUrlRequest {
+  string user_id = 1; // UUIDv7
+  PhotoType photo_type = 2;
+  int32 extra_position = 3; // required for PHOTO_TYPE_EXTRA, valid: 1..6
+  string content_type = 4; // image/jpeg, image/png, image/webp
+  int64 content_length = 5; // bytes
+}
+
+message GetUserPhotoUploadUrlResponse {
+  string object_key = 1;
+  string upload_url = 2;
+  int64 expires_in_seconds = 3;
+}
+
+message ConfirmUserPhotoUploadRequest {
+  string user_id = 1; // UUIDv7
+  PhotoType photo_type = 2;
+  int32 extra_position = 3; // required for PHOTO_TYPE_EXTRA
+  string object_key = 4;
+}
+
+message ConfirmUserPhotoUploadResponse {
+  User user = 1;
+}
+
+message DeleteUserPhotoRequest {
+  string user_id = 1; // UUIDv7
+  int64 photo_id = 2; // id from user_photos table (only extra photo)
+}
+
+message DeleteUserPhotoResponse {}
+
+message GetUserPhotoDownloadUrlRequest {
+  string user_id = 1; // UUIDv7
+  PhotoType photo_type = 2;
+  int64 photo_id = 3; // required for PHOTO_TYPE_EXTRA
+}
+
+message GetUserPhotoDownloadUrlResponse {
+  string download_url = 1;
+  int64 expires_in_seconds = 2;
+}
+
+service UserService {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  rpc GetUserPhotoUploadUrl(GetUserPhotoUploadUrlRequest) returns (GetUserPhotoUploadUrlResponse);
+  rpc ConfirmUserPhotoUpload(ConfirmUserPhotoUploadRequest) returns (ConfirmUserPhotoUploadResponse);
+  rpc DeleteUserPhoto(DeleteUserPhotoRequest) returns (DeleteUserPhotoResponse);
+  rpc GetUserPhotoDownloadUrl(GetUserPhotoDownloadUrlRequest) returns (GetUserPhotoDownloadUrlResponse);
+}
+
+

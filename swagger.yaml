@@ -1,0 +1,649 @@
+openapi: 3.0.3
+info:
+  title: User Service API
+  version: 1.0.0
+  description: |
+    REST facade documentation for User gRPC service.
+
+    Основная логика:
+    - Пользователь хранится в PostgreSQL (`users`).
+    - Главная фото хранится как `primary_photo_object_key` + `primary_photo_url`.
+    - Дополнительные фото хранятся в `user_photos` (позиции 1..6).
+    - Файлы фото загружаются в S3 через presigned URL:
+      1) запрос upload URL,
+      2) загрузка файла напрямую в S3,
+      3) подтверждение загрузки.
+    - Ошибки клиенту отдаются в безопасном виде (без внутренних деталей сервиса).
+
+servers:
+  - url: http://localhost:8080
+    description: Example API Gateway URL
+
+tags:
+  - name: users
+    description: CRUD и поиск пользователей
+  - name: photos
+    description: Работа с фото пользователя через S3 presigned URL
+
+paths:
+  /v1/users:
+    post:
+      tags: [users]
+      summary: Create user
+      operationId: createUser
+      description: |
+        Создает пользователя.
+        `id` генерируется сервисом как UUIDv7.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '200':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateUserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      tags: [users]
+      summary: List users
+      operationId: listUsers
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            format: int32
+            default: 20
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            format: int32
+            default: 0
+        - in: query
+          name: city_id
+          schema:
+            type: integer
+            format: int64
+          description: Optional city filter.
+      responses:
+        '200':
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListUsersResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/users/{user_id}:
+    get:
+      tags: [users]
+      summary: Get user
+      operationId: getUser
+      parameters:
+        - $ref: '#/components/parameters/UserID'
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetUserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [users]
+      summary: Update user
+      operationId: updateUser
+      parameters:
+        - $ref: '#/components/parameters/UserID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserPatchRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateUserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [users]
+      summary: Delete user
+      operationId: deleteUser
+      parameters:
+        - $ref: '#/components/parameters/UserID'
+      responses:
+        '200':
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteUserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/users/{user_id}/photos/upload-url:
+    post:
+      tags: [photos]
+      summary: Get upload URL for user photo
+      operationId: getUserPhotoUploadUrl
+      description: |
+        Возвращает presigned URL для загрузки фото напрямую в S3.
+        После успешной загрузки файла в S3 необходимо вызвать confirm endpoint.
+      parameters:
+        - $ref: '#/components/parameters/UserID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetUserPhotoUploadUrlRequest'
+      responses:
+        '200':
+          description: Upload URL generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetUserPhotoUploadUrlResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/users/{user_id}/photos:confirm:
+    post:
+      tags: [photos]
+      summary: Confirm uploaded user photo
+      operationId: confirmUserPhotoUpload
+      description: |
+        Подтверждает, что файл загружен в S3, и обновляет метаданные в БД.
+        - Для `photo_type=PHOTO_TYPE_PRIMARY` обновляется главная фото.
+        - Для `photo_type=PHOTO_TYPE_EXTRA` обновляется дополнительная фото по `extra_position`.
+      parameters:
+        - $ref: '#/components/parameters/UserID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmUserPhotoUploadRequest'
+      responses:
+        '200':
+          description: Upload confirmed, updated user returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmUserPhotoUploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/users/{user_id}/photos/{photo_id}:
+    delete:
+      tags: [photos]
+      summary: Delete extra photo
+      operationId: deleteUserPhoto
+      description: |
+        В текущей бизнес-логике отдельное удаление extra-фото запрещено.
+        Вместо этого используется операция замены фото.
+      parameters:
+        - $ref: '#/components/parameters/UserID'
+        - $ref: '#/components/parameters/PhotoID'
+      responses:
+        '200':
+          description: Delete request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteUserPhotoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/users/{user_id}/photos/download-url:
+    get:
+      tags: [photos]
+      summary: Get download URL for user photo
+      operationId: getUserPhotoDownloadUrl
+      parameters:
+        - $ref: '#/components/parameters/UserID'
+        - in: query
+          name: photo_type
+          required: true
+          schema:
+            $ref: '#/components/schemas/PhotoType'
+        - in: query
+          name: photo_id
+          schema:
+            type: integer
+            format: int64
+          description: Required for extra photo.
+      responses:
+        '200':
+          description: Download URL generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetUserPhotoDownloadUrlResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    UserID:
+      in: path
+      name: user_id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUIDv7 user id.
+    PhotoID:
+      in: path
+      name: photo_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalid:
+              value:
+                error: invalid request
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notFound:
+              value:
+                error: resource not found
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            conflict:
+              value:
+                error: resource conflict
+    ServiceUnavailable:
+      description: Upstream dependency unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unavailable:
+              value:
+                error: service unavailable
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            internal:
+              value:
+                error: internal server error
+
+  schemas:
+    Sex:
+      type: string
+      enum: [SEX_UNSPECIFIED, SEX_MALE, SEX_FEMALE]
+
+    PhotoType:
+      type: string
+      enum: [PHOTO_TYPE_UNSPECIFIED, PHOTO_TYPE_PRIMARY, PHOTO_TYPE_EXTRA]
+
+    City:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+
+    UserPhoto:
+      type: object
+      required: [id, object_key, url, position]
+      properties:
+        id:
+          type: integer
+          format: int64
+        object_key:
+          type: string
+        url:
+          type: string
+          description: |
+            В ответах на пользовательские методы обычно возвращается presigned download URL.
+        position:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 6
+
+    NewUserPhoto:
+      type: object
+      required: [object_key, url, position]
+      properties:
+        object_key:
+          type: string
+        url:
+          type: string
+        position:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 6
+
+    User:
+      type: object
+      required:
+        [id, first_name, last_name, email, birth_date, toiler_score, sex, primary_photo_object_key, primary_photo_url]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        birth_date:
+          type: string
+          format: date
+        bio:
+          type: string
+        toiler_score:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10
+        alcohol_info:
+          type: string
+        smoking_info:
+          type: string
+        sex:
+          $ref: '#/components/schemas/Sex'
+        height_cm:
+          type: integer
+          format: int32
+          minimum: 100
+          maximum: 260
+        city:
+          $ref: '#/components/schemas/City'
+        primary_photo_object_key:
+          type: string
+        primary_photo_url:
+          type: string
+          description: Presigned download URL (short-lived) in read responses.
+        extra_photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserPhoto'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      required:
+        [first_name, last_name, email, birth_date, toiler_score, sex, primary_photo_object_key, primary_photo_url]
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        birth_date:
+          type: string
+          format: date
+        bio:
+          type: string
+        toiler_score:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10
+        alcohol_info:
+          type: string
+        smoking_info:
+          type: string
+        sex:
+          $ref: '#/components/schemas/Sex'
+        height_cm:
+          type: integer
+          format: int32
+        city_id:
+          type: integer
+          format: int64
+        primary_photo_object_key:
+          type: string
+        primary_photo_url:
+          type: string
+        extra_photos:
+          type: array
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/NewUserPhoto'
+
+    CreateUserResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+
+    GetUserResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+
+    UpdateUserPatchRequest:
+      type: object
+      description: Partial update model for REST facade.
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        birth_date:
+          type: string
+          format: date
+        bio:
+          type: string
+        toiler_score:
+          type: integer
+          format: int32
+        alcohol_info:
+          type: string
+        smoking_info:
+          type: string
+        sex:
+          $ref: '#/components/schemas/Sex'
+        height_cm:
+          type: integer
+          format: int32
+        city_id:
+          type: integer
+          format: int64
+        primary_photo_object_key:
+          type: string
+        primary_photo_url:
+          type: string
+        extra_photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewUserPhoto'
+
+    UpdateUserResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+
+    DeleteUserResponse:
+      type: object
+      additionalProperties: false
+
+    ListUsersResponse:
+      type: object
+      required: [users]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+
+    GetUserPhotoUploadUrlRequest:
+      type: object
+      required: [photo_type, content_type, content_length]
+      properties:
+        photo_type:
+          $ref: '#/components/schemas/PhotoType'
+        extra_position:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 6
+          description: Required for extra photo.
+        content_type:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+        content_length:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 10485760
+
+    GetUserPhotoUploadUrlResponse:
+      type: object
+      required: [object_key, upload_url, expires_in_seconds]
+      properties:
+        object_key:
+          type: string
+        upload_url:
+          type: string
+          description: Presigned URL for direct `PUT` into S3.
+        expires_in_seconds:
+          type: integer
+          format: int64
+
+    ConfirmUserPhotoUploadRequest:
+      type: object
+      required: [photo_type, object_key]
+      properties:
+        photo_type:
+          $ref: '#/components/schemas/PhotoType'
+        extra_position:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 6
+        object_key:
+          type: string
+
+    ConfirmUserPhotoUploadResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+
+    DeleteUserPhotoResponse:
+      type: object
+      additionalProperties: false
+
+    GetUserPhotoDownloadUrlResponse:
+      type: object
+      required: [download_url, expires_in_seconds]
+      properties:
+        download_url:
+          type: string
+        expires_in_seconds:
+          type: integer
+          format: int64
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: invalid request
+
+
