@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"net"
-
+	"net/http"
+    "github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/S1FFFkA/user-mgz/internal/config"
 	s3repo "github.com/S1FFFkA/user-mgz/internal/repository/s3"
 	userrepo "github.com/S1FFFkA/user-mgz/internal/repository/user"
@@ -59,7 +60,14 @@ func main() {
 			zap.Error(err),
 		)
 	}
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", promhttp.Handler())
 
+	go func() {
+    	if err := http.ListenAndServe(":9102", metricsMux); err != nil {
+        	log.Warn("metrics server stopped", zap.Error(err))
+    	}
+	}()
 	grpcServer := grpc.NewServer(
 		grpc.UnaryInterceptor(grpcmw.UnaryTraceInterceptor()),
 	)
