@@ -6,14 +6,17 @@ import (
 
 	"github.com/S1FFFkA/user-mgz/internal/domain"
 	repocore "github.com/S1FFFkA/user-mgz/internal/repository"
+	"github.com/google/uuid"
 )
 
 func (r *Repository) CreateUser(ctx context.Context, user domain.User) (domain.User, error) {
-	userID, err := repocore.NewUUIDv7()
-	if err != nil {
-		return domain.User{}, fmt.Errorf("generate uuidv7 for user: %w", err)
+	if user.ID == uuid.Nil {
+		userID, err := repocore.NewUUIDv7()
+		if err != nil {
+			return domain.User{}, fmt.Errorf("generate uuidv7 for user: %w", err)
+		}
+		user.ID = userID
 	}
-	user.ID = userID
 
 	const userQuery = `
 INSERT INTO users (

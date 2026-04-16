@@ -12,6 +12,7 @@ import (
 	userv1 "github.com/S1FFFkA/user-mgz/pkg/api/user/v1"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -32,10 +33,31 @@ func NewServer(userService usersvc.UseCase, logger *zap.Logger) *Server {
 	}
 }
 
+// authUserIDFromMeta extracts the auth service UUID forwarded by the gateway
+// via gRPC metadata key "x-auth-user-id". Returns uuid.Nil if absent or invalid.
+func authUserIDFromMeta(ctx context.Context) uuid.UUID {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return uuid.Nil
+	}
+	vals := md.Get("x-auth-user-id")
+	if len(vals) == 0 {
+		return uuid.Nil
+	}
+	id, err := uuid.Parse(vals[0])
+	if err != nil {
+		return uuid.Nil
+	}
+	return id
+}
+
 func (s *Server) CreateUser(ctx context.Context, req *userv1.CreateUserRequest) (*userv1.CreateUserResponse, error) {
 	user, err := fromCreateRequest(req)
 	if err != nil {
 		return nil, domain.ToGRPCStatus(domain.InvalidArgumentError("invalid create user request", err))
+	}
+	if authID := authUserIDFromMeta(ctx); authID != uuid.Nil {
+		user.ID = authID
 	}
 	created, err := s.userService.CreateUser(ctx, user)
 	if err != nil {
