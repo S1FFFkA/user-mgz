@@ -1,18 +1,17 @@
-package user
+package repository
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/S1FFFkA/user-mgz/internal/domain"
-	repo "github.com/S1FFFkA/user-mgz/internal/repository"
-	"github.com/jackc/pgx/v5"
+	repocore "github.com/S1FFFkA/user-mgz/internal/repository"
 )
 
-func (r *UserRepository) CreateUser(ctx context.Context, user domain.User) (domain.User, error) {
-	userID, err := repo.NewUUIDv7()
+func (r *Repository) CreateUser(ctx context.Context, user domain.User) (domain.User, error) {
+	userID, err := repocore.NewUUIDv7()
 	if err != nil {
-		return domain.User{}, domain.InternalError(err)
+		return domain.User{}, fmt.Errorf("generate uuidv7 for user: %w", err)
 	}
 	user.ID = userID
 
@@ -26,8 +25,7 @@ RETURNING
 	id, first_name, last_name, email, birth_date, bio, toiler_score, alcohol_info, smoking_info, sex,
 	height_cm, city_id, primary_photo_object_key, primary_photo_url, created_at, updated_at`
 
-	db := r.getter.DefaultTrOrDB(ctx, r.pool)
-	createdUser, err := repo.ScanUser(db.QueryRow(
+	createdUser, err := repocore.ScanUser(r.pool.QueryRow(
 		ctx,
 		userQuery,
 		user.ID,
@@ -46,10 +44,7 @@ RETURNING
 		user.PrimaryPhotoURL,
 	))
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.User{}, domain.NotFoundError("resource not found", err)
-		}
-		return domain.User{}, domain.InternalError(err)
+		return domain.User{}, fmt.Errorf("create user: %w", err)
 	}
 
 	return createdUser, nil
