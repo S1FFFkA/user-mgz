@@ -12,13 +12,13 @@
 
 - Контракт gRPC в `gRPC/service.proto`
 - gRPC сервер в `cmd/main.go`
-- Реализованные gRPC handlers в `internal/transport/grpc/user/server.go`
+- Реализованные gRPC handlers в `internal/delivery/grpc/user/server.go`
 - Слоистый каркас:
   - `internal/storage/postgres` (инициализация пула PostgreSQL)
   - `internal/storage/s3` (инициализация S3 клиента)
   - `internal/repository/user`, `internal/repository/userphoto`, `internal/repository/s3` (SQL/S3-реализация по доменам)
   - `internal/repository/interfaces.go` (интерфейсы)
-  - `internal/usecase/user` (бизнес-слой/use-case через интерфейсы репозиториев)
+  - `internal/service/user` (бизнес-слой через интерфейсы репозиториев и `TxManager`)
   - `internal/domain` (домен-модели)
   - `pkg/logger` (`zap` JSON логгер)
 
@@ -58,28 +58,16 @@ protoc -I . -I C:\protoc\include --go_out=. --go_opt=module=github.com/S1FFFkA/u
 
 ## SQL схема
 
-Схема хранится в миграциях `migrations/`:
+Схема хранится в миграциях `migrations/` (одна таблица на файл, имена `NNN_name.up.sql` / `.down.sql`):
 
-- `001_init.up.sql` — применить всю схему
-- `001_init.down.sql` — откатить схему
+- `001_cities` — справочник городов
+- `002_users` — пользователи и тип `sex`
+- `003_user_photos` — дополнительные фото
+- `004_user_push_tokens` — push-токены (provider, token, device_id, platform, timestamps)
 
-- `cities`
-- `users`
-- `user_photos`
-- enum `sex` (`male`, `female`)
-- триггер на `users.updated_at`
+Применение всех `*.up.sql` по порядку (или через свой runner).
 
-Применение миграции вручную:
-
-```powershell
-psql "$env:DATABASE_URL" -f .\migrations\001_init.up.sql
-```
-
-Откат:
-
-```powershell
-psql "$env:DATABASE_URL" -f .\migrations\001_init.down.sql
-```
+Откат — в обратном порядке соответствующие `*.down.sql`.
 
 Важно: в схеме `users.id` без `DEFAULT`, потому что UUIDv7 генерируется в Go-коде репозитория.
 
@@ -107,9 +95,11 @@ go run .\cmd
 
 ## Запуск через Docker Compose
 
-Поднимаются 3 контейнера:
+Поднимаются контейнеры:
 - `postgres` (БД)
 - `migrate` (одноразовый контейнер, применяет `migrations/*.up.sql` и завершается)
+- `minio` (локальное S3)
+- `minio-init` (создает bucket и завершается)
 - `app` (gRPC сервис)
 
 Скопируй пример env и заполни ключи:
@@ -129,6 +119,33 @@ docker compose up --build
 ```powershell
 docker compose down
 ```
+
+### Тестовая БД (профиль `test`)
+
+Отдельные контейнеры **`postgres-test`** и **`migrate-test`** (свой volume и порт **5434**, БД `user_service_test`) **не поднимаются** при обычном `docker compose up` — только с профилем:
+
+```powershell
+docker compose --profile test up -d postgres-test migrate-test
+```
+
+Или через Makefile: `make compose-test-up`. Тесты против этой БД: `make integration-testdb` / `make smoke-testdb`.
+
+## Makefile
+
+Если установлен `make`, можно запускать так:
+
+```bash
+make unit
+make cover
+make integration
+make smoke
+make compose-reset
+make compose-test-up   # опционально: изолированная БД для тестов (профиль test)
+make integration-testdb
+```
+
+Интеграционные тесты запускаются с тегом `integration` и лежат в `integration/`.
+Smoke-тесты запускаются с тегом `smoke` и лежат в `smoke/`.
 
 Остановить и удалить volume с данными БД:
 
@@ -163,13 +180,8 @@ go run ./cmd/client get-user --user-id <user_id>
 Unit:
 
 ```powershell
-go test ./internal/usecase/user ./internal/transport/grpc/user -cover
+go test ./internal/service/user ./internal/delivery/grpc/user -cover
 ```
 
-Integration (требует Docker):
-
-```powershell
-go test -tags=integration ./internal/repository/user ./internal/repository/userphoto -cover
-```
-
+Интеграционные тесты с БД планируются отдельным пакетом/папкой (сейчас в репозитории нет).
 

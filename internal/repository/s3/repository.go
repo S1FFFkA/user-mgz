@@ -1,20 +1,21 @@
-package repository
+package s3
 
 import (
-	repocore "github.com/S1FFFkA/user-mgz/internal/repository"
+	"github.com/S1FFFkA/user-mgz/internal/repository"
 	"github.com/minio/minio-go/v7"
 )
 
+// Repository — MinIO/S3 в слое репозитория (инфраструктура).
 type Repository struct {
 	client *minio.Client
 	bucket string
 }
 
-func NewRepository(client *minio.Client, bucket string) *Repository {
+func New(client *minio.Client, bucket string) *Repository {
 	return &Repository{
 		client: client,
 		bucket: bucket,
 	}
 }
 
-var _ repocore.S3Repository = (*Repository)(nil)
+var _ repository.S3RepositoryInterface = (*Repository)(nil)

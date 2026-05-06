@@ -1,13 +1,11 @@
 package repository
 
 import (
-	"context"
 	"fmt"
 	"time"
 
 	"github.com/S1FFFkA/user-mgz/internal/domain"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 type RowScanner interface {
@@ -92,30 +90,6 @@ func ScanUserPhoto(scanner RowScanner) (domain.UserPhoto, error) {
 		return domain.UserPhoto{}, fmt.Errorf("scan user photo: %w", err)
 	}
 	return photo, nil
-}
-
-func ReplaceExtraPhotosTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID, photos []domain.UserPhoto) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM user_photos WHERE user_id = $1`, userID); err != nil {
-		return fmt.Errorf("delete old extra photos: %w", err)
-	}
-	return InsertExtraPhotosTx(ctx, tx, userID, photos)
-}
-
-func InsertExtraPhotosTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID, photos []domain.UserPhoto) error {
-	if len(photos) == 0 {
-		return nil
-	}
-
-	const query = `
-INSERT INTO user_photos (user_id, object_key, url, position)
-VALUES ($1, $2, $3, $4)`
-
-	for _, photo := range photos {
-		if _, err := tx.Exec(ctx, query, userID, photo.ObjectKey, photo.URL, photo.Position); err != nil {
-			return fmt.Errorf("insert extra photo: %w", err)
-		}
-	}
-	return nil
 }
 
 func CollectExtraPhotos(rows RowIterator) ([]domain.UserPhoto, error) {

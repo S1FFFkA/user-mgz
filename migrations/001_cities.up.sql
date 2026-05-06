@@ -1,0 +1,5 @@
+CREATE TABLE cities (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

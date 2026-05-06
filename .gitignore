@@ -1,0 +1,13 @@
+.idea/
+*.iml
+
+.env
+.env.*
+
+cov.out
+coverage.out
+coverage.txt
+
+bin/
+tmp/
+

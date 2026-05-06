@@ -90,6 +90,24 @@ func IsErrorCode(err error, code ErrorCode) bool {
 	return appErr.Code == code
 }
 
+// NormalizeAppError оставляет уже доменные ошибки как есть, остальное заворачивает в Internal.
+// Используется на границе delivery (gRPC), если из сервиса пришла не *AppError.
+func NormalizeAppError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if IsErrorCode(err, ErrorCodeInvalidArgument) ||
+		IsErrorCode(err, ErrorCodeNotFound) ||
+		IsErrorCode(err, ErrorCodeConflict) ||
+		IsErrorCode(err, ErrorCodeUnauthorized) ||
+		IsErrorCode(err, ErrorCodeForbidden) ||
+		IsErrorCode(err, ErrorCodeService) ||
+		IsErrorCode(err, ErrorCodeInternal) {
+		return err
+	}
+	return InternalError(err)
+}
+
 // ToGRPCStatus intentionally always returns Internal for client safety.
 func ToGRPCStatus(err error) error {
 	if err == nil {

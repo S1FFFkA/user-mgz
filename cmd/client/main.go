@@ -52,6 +52,8 @@ func main() {
 		photoConfirm(ctx, client, os.Args[2:])
 	case "photo-download-url":
 		photoDownloadURL(ctx, client, os.Args[2:])
+	case "delete-user-photo":
+		deleteUserPhoto(ctx, client, os.Args[2:])
 	default:
 		usage()
 		os.Exit(1)
@@ -282,6 +284,23 @@ func photoDownloadURL(ctx context.Context, c userv1.UserServiceClient, args []st
 	printProto(resp)
 }
 
+func deleteUserPhoto(ctx context.Context, c userv1.UserServiceClient, args []string) {
+	fs := flag.NewFlagSet("delete-user-photo", flag.ExitOnError)
+	userID := fs.String("user-id", "", "required UUIDv7")
+	photoID := fs.Int64("photo-id", 0, "required extra photo id")
+	_ = fs.Parse(args)
+	require(*userID != "" && *photoID > 0, "required: --user-id --photo-id")
+
+	resp, err := c.DeleteUserPhoto(ctx, &userv1.DeleteUserPhotoRequest{
+		UserId:  *userID,
+		PhotoId: *photoID,
+	})
+	if err != nil {
+		failf("DeleteUserPhoto: %v", err)
+	}
+	printProto(resp)
+}
+
 func parseSex(raw string) userv1.Sex {
 	switch raw {
 	case "male":
@@ -351,5 +370,6 @@ Commands:
   photo-upload-url    --user-id <uuid> --type primary|extra [--extra-pos 1..6] --content-type image/jpeg --content-length 12345
   photo-confirm       --user-id <uuid> --type primary|extra [--extra-pos 1..6] --object-key <s3-object-key>
   photo-download-url  --user-id <uuid> --type primary|extra [--photo-id <id-for-extra>]
+  delete-user-photo   --user-id <uuid> --photo-id <id-for-extra>
 `)
 }
