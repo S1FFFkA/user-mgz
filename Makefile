@@ -1,7 +1,8 @@
-.PHONY: help deps unit test cover cover-docker compose-up compose-down compose-reset compose-test-up compose-test-down integration integration-testdb smoke smoke-testdb lint
+.PHONY: help proto deps unit test cover cover-docker compose-up compose-down compose-reset compose-test-up compose-test-down integration integration-testdb smoke smoke-testdb lint
 
 help:
 	@echo "Targets:"
+	@echo "  proto             - protoc: grpc/user_mgz.proto -> pkg/grpc/v1"
 	@echo "  deps              - go mod tidy"
 	@echo "  unit              - go test ./... (unit tests)"
 	@echo "  cover             - unit tests with coverage summary"
@@ -16,6 +17,12 @@ help:
 	@echo "  integration-testdb - то же, БД из профиля test (порт 5434)"
 	@echo "  smoke             - go test smoke (порт 5433)"
 	@echo "  smoke-testdb      - smoke против БД профиля test (порт 5434)"
+
+proto:
+	protoc -I grpc \
+		--go_out=. --go_opt=module=github.com/S1FFFkA/user-mgz \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/S1FFFkA/user-mgz \
+		grpc/user_mgz.proto
 
 deps:
 	go mod tidy
@@ -55,6 +62,7 @@ integration:
 integration-testdb:
 	DATABASE_URL="postgres://postgres:postgres@localhost:5434/user_service_test?sslmode=disable" go test -tags=integration ./integration/...
 
+# Postgres на localhost:5433; для TestGRPC_Smoke_UploadDownloadPrimaryPhoto нужен живой MinIO (профиль local-s3) или свой S3_*
 smoke:
 	DATABASE_URL="postgres://postgres:postgres@localhost:5433/user_service?sslmode=disable" go test -tags=smoke ./smoke/...
 

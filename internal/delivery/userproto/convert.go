@@ -7,9 +7,8 @@ import (
 	"time"
 
 	"github.com/S1FFFkA/user-mgz/internal/domain"
-	userv1 "github.com/S1FFFkA/user-mgz/pkg/api/user/v1"
+	userv1 "github.com/S1FFFkA/user-mgz/pkg/grpc/v1"
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func ParseUUID(raw string) (uuid.UUID, error) {
@@ -191,8 +190,8 @@ func ToProtoUser(user domain.User) *userv1.User {
 		Sex:                   toProtoSex(user.Sex),
 		PrimaryPhotoObjectKey: user.PrimaryPhotoObjectKey,
 		PrimaryPhotoUrl:       user.PrimaryPhotoURL,
-		CreatedAt:             timestamppb.New(user.CreatedAt),
-		UpdatedAt:             timestamppb.New(user.UpdatedAt),
+		CreatedAt:             timeToProtoTimestamp(user.CreatedAt),
+		UpdatedAt:             timeToProtoTimestamp(user.UpdatedAt),
 	}
 	if user.Bio != nil {
 		result.Bio = *user.Bio
@@ -219,4 +218,12 @@ func ToProtoUser(user domain.User) *userv1.User {
 		})
 	}
 	return result
+}
+
+func timeToProtoTimestamp(t time.Time) *userv1.Timestamp {
+	if t.IsZero() {
+		return nil
+	}
+	n := t.UnixNano()
+	return &userv1.Timestamp{Seconds: n / 1e9, Nanos: int32(n % 1e9)}
 }

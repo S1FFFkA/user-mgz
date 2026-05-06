@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -27,19 +28,21 @@ func Load() (Config, error) {
 		useSSL = parsed
 	}
 
+	databaseURL, err := loadDatabaseURL()
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg := Config{
 		GRPCPort:    getEnvOrDefault("GRPC_PORT", "50051"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		S3Endpoint:  os.Getenv("S3_ENDPOINT"),
-		S3AccessKey: os.Getenv("S3_ACCESS_KEY"),
-		S3SecretKey: os.Getenv("S3_SECRET_KEY"),
-		S3Bucket:    os.Getenv("S3_BUCKET"),
+		DatabaseURL: databaseURL,
+		S3Endpoint:  getEnvOrDefault("S3_ENDPOINT", "localhost:9000"),
+		S3AccessKey: getEnvOrDefault("S3_ACCESS_KEY", "minioadmin"),
+		S3SecretKey: getEnvOrDefault("S3_SECRET_KEY", "minioadmin"),
+		S3Bucket:    getEnvOrDefault("S3_BUCKET", "fotos"),
 		S3UseSSL:    useSSL,
 	}
 
-	if cfg.DatabaseURL == "" {
-		return Config{}, errors.New("DATABASE_URL is required")
-	}
 	if cfg.S3Endpoint == "" {
 		return Config{}, errors.New("S3_ENDPOINT is required")
 	}
@@ -54,6 +57,19 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+const defaultDatabaseURL = "postgres://postgres:postgres@localhost:5433/user_service?sslmode=disable"
+
+func loadDatabaseURL() (string, error) {
+	raw, set := os.LookupEnv("DATABASE_URL")
+	if !set {
+		return defaultDatabaseURL, nil
+	}
+	if strings.TrimSpace(raw) == "" {
+		return "", errors.New("DATABASE_URL is required")
+	}
+	return strings.TrimSpace(raw), nil
 }
 
 func getEnvOrDefault(key, fallback string) string {

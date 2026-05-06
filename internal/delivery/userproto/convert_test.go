@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	userv1 "github.com/S1FFFkA/user-mgz/pkg/api/user/v1"
+	userv1 "github.com/S1FFFkA/user-mgz/pkg/grpc/v1"
 )
 
 func TestFromCreateRequest_ParsesBirthDate(t *testing.T) {

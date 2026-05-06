@@ -5,6 +5,7 @@ package smoke
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -24,8 +25,9 @@ import (
 	userservice "github.com/S1FFFkA/user-mgz/internal/service/user"
 	userphotoservice "github.com/S1FFFkA/user-mgz/internal/service/userphoto"
 	s3storage "github.com/S1FFFkA/user-mgz/internal/storage/s3"
-	userv1 "github.com/S1FFFkA/user-mgz/pkg/api/user/v1"
+	userv1 "github.com/S1FFFkA/user-mgz/pkg/grpc/v1"
 	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -140,6 +142,8 @@ func TestGRPC_Smoke_UploadDownloadPrimaryPhoto_RoundTripBytes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create minio client: %v", err)
 	}
+	requireMinIOForSmoke(t, minioClient, endpoint, bucket)
+
 	s3 := s3repo.New(minioClient, bucket)
 
 	usersR := userrepo.New(env.Pool)
@@ -271,4 +275,35 @@ func getenv(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// requireMinIOForSmoke проверяет, что до MinIO (или совместимого S3) реально достучаться и есть bucket —
+// иначе GetUserPhotoUploadUrl вернёт gRPC Unavailable («service unavailable»), что выглядит как ошибка сервера.
+func requireMinIOForSmoke(t *testing.T, client *minio.Client, endpoint, bucket string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	exists, err := client.BucketExists(ctx, bucket)
+	if err != nil {
+		msg := fmt.Sprintf(
+			"MinIO недоступен или неверные ключи (endpoint=%q bucket=%q): %v\n"+
+				"Подните MinIO с bucket: docker compose --profile local-s3 up -d minio minio-init\n"+
+				"Или переопределите S3_ENDPOINT/S3_ACCESS_KEY/S3_SECRET_KEY/S3_BUCKET.",
+			endpoint, bucket, err)
+		if os.Getenv("SMOKE_REQUIRE_MINIO") == "1" {
+			t.Fatal(msg)
+		}
+		t.Skip(msg)
+	}
+	if !exists {
+		msg := fmt.Sprintf(
+			"Bucket %q на %q не найден (создайте через mc или minio-init в compose).\n"+
+				"docker compose --profile local-s3 up -d minio minio-init",
+			bucket, endpoint)
+		if os.Getenv("SMOKE_REQUIRE_MINIO") == "1" {
+			t.Fatal(msg)
+		}
+		t.Skip(msg)
+	}
 }

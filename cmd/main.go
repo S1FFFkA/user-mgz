@@ -13,7 +13,9 @@ import (
 	trmmanager "github.com/avito-tech/go-transaction-manager/trm/v2/manager"
 
 	"github.com/S1FFFkA/user-mgz/internal/config"
+	pushtokengrpc "github.com/S1FFFkA/user-mgz/internal/delivery/grpc/pushtoken"
 	usergrpc "github.com/S1FFFkA/user-mgz/internal/delivery/grpc/user"
+	pushtokenrepo "github.com/S1FFFkA/user-mgz/internal/repository/pushtoken"
 	s3repo "github.com/S1FFFkA/user-mgz/internal/repository/s3"
 	userrepo "github.com/S1FFFkA/user-mgz/internal/repository/user"
 	userphotorepo "github.com/S1FFFkA/user-mgz/internal/repository/userphoto"
@@ -22,7 +24,7 @@ import (
 	userphotoservice "github.com/S1FFFkA/user-mgz/internal/service/userphoto"
 	pgstorage "github.com/S1FFFkA/user-mgz/internal/storage/postgres"
 	s3storage "github.com/S1FFFkA/user-mgz/internal/storage/s3"
-	userv1 "github.com/S1FFFkA/user-mgz/pkg/api/user/v1"
+	userv1 "github.com/S1FFFkA/user-mgz/pkg/grpc/v1"
 	"github.com/S1FFFkA/user-mgz/pkg/logger"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -66,6 +68,7 @@ func main() {
 	txm := service.NewTxManager(trmmanager.Must(trmpgx.NewDefaultFactory(pool)))
 	userSvc := userservice.NewService(usersR, photosR, txm, log)
 	photoSvc := userphotoservice.NewService(usersR, photosR, s3R, userSvc, log)
+	pushTokenR := pushtokenrepo.New(pool)
 
 	lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {
@@ -77,6 +80,7 @@ func main() {
 
 	grpcServer := grpc.NewServer()
 	userv1.RegisterUserServiceServer(grpcServer, usergrpc.NewServer(userSvc, photoSvc, log))
+	userv1.RegisterPushTokenServiceServer(grpcServer, pushtokengrpc.NewServer(pushTokenR, log))
 
 	reflection.Register(grpcServer)
 

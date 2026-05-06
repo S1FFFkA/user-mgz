@@ -1,2 +1,11 @@
 .env
 bin/
+*.exe
+cov.out
+
+# IDE / локальный мусор
+.idea/
+
+# ключи Firebase Admin SDK и опечатки имён файла (~/.json)
+secrets/firebase-adminsdk.json
+secrets/firebase-adminskd.json

@@ -10,7 +10,7 @@
 
 ## Что уже заложено
 
-- Контракт gRPC в `gRPC/service.proto`
+- Контракт gRPC в `grpc/user_mgz.proto`
 - gRPC сервер в `cmd/main.go`
 - Реализованные gRPC handlers в `internal/delivery/grpc/user/server.go`
 - Слоистый каркас:
@@ -23,6 +23,8 @@
   - `pkg/logger` (`zap` JSON логгер)
 
 ## Методы сервиса (MVP)
+
+Сервисы в одном proto: **`user.v1.UserService`** и **`user.v1.PushTokenService`** (`RegisterPushToken`, `RemovePushToken`).
 
 - `CreateUser` - создать пользователя
 - `GetUser` - получить пользователя по `user_id`
@@ -45,16 +47,16 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 ## Генерация protobuf/gRPC кода
 
-Запускать из корня проекта:
+Из корня проекта: `make proto` или:
 
 ```powershell
-protoc -I . -I C:\protoc\include --go_out=. --go_opt=module=github.com/S1FFFkA/user-mgz --go-grpc_out=. --go-grpc_opt=module=github.com/S1FFFkA/user-mgz gRPC/service.proto
+protoc -I grpc --go_out=. --go_opt=module=github.com/S1FFFkA/user-mgz --go-grpc_out=. --go-grpc_opt=module=github.com/S1FFFkA/user-mgz grpc/user_mgz.proto
 ```
 
-После этого сгенерируются файлы:
+Результат:
 
-- `pkg/api/user/v1/service.pb.go`
-- `pkg/api/user/v1/service_grpc.pb.go`
+- `pkg/grpc/v1/user_mgz.pb.go`
+- `pkg/grpc/v1/user_mgz_grpc.pb.go`
 
 ## SQL схема
 
@@ -101,6 +103,8 @@ go run .\cmd
 - `minio` (локальное S3)
 - `minio-init` (создает bucket и завершается)
 - `app` (gRPC сервис)
+- `kafka` (брокер событий)
+- `push-consumer` (воркер, читает `chat.messages` и отправляет push)
 
 Скопируй пример env и заполни ключи:
 
@@ -112,6 +116,15 @@ Copy-Item .\env.example .\.env
 
 ```powershell
 docker compose up --build
+```
+
+Локальный запуск только консьюмера без Docker:
+
+```powershell
+$env:DATABASE_URL="postgres://postgres:postgres@localhost:5433/user_service?sslmode=disable"
+$env:KAFKA_BROKERS="localhost:9092"
+$env:KAFKA_TOPIC_CHAT_MESSAGES="chat.messages"
+go run ./cmd/push-consumer
 ```
 
 Остановить:

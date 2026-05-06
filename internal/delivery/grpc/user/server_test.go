@@ -7,7 +7,7 @@ import (
 
 	"github.com/S1FFFkA/user-mgz/internal/domain"
 	"github.com/S1FFFkA/user-mgz/internal/service"
-	userv1 "github.com/S1FFFkA/user-mgz/pkg/api/user/v1"
+	userv1 "github.com/S1FFFkA/user-mgz/pkg/grpc/v1"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

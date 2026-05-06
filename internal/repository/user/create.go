@@ -1,4 +1,4 @@
-package repository
+package user
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	repocore "github.com/S1FFFkA/user-mgz/internal/repository"
 )
 
-func (r *Repository) CreateUser(ctx context.Context, user domain.User) (domain.User, error) {
+func (r *UserRepository) CreateUser(ctx context.Context, user domain.User) (domain.User, error) {
 	userID, err := repocore.NewUUIDv7()
 	if err != nil {
 		return domain.User{}, fmt.Errorf("generate uuidv7 for user: %w", err)
@@ -25,7 +25,8 @@ RETURNING
 	id, first_name, last_name, email, birth_date, bio, toiler_score, alcohol_info, smoking_info, sex,
 	height_cm, city_id, primary_photo_object_key, primary_photo_url, created_at, updated_at`
 
-	createdUser, err := repocore.ScanUser(r.pool.QueryRow(
+	db := r.getter.DefaultTrOrDB(ctx, r.pool)
+	createdUser, err := repocore.ScanUser(db.QueryRow(
 		ctx,
 		userQuery,
 		user.ID,

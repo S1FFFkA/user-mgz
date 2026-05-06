@@ -133,6 +133,59 @@ services:
       - "${GRPC_PORT_HOST:-50051}:${GRPC_PORT:-50051}"
     restart: unless-stopped
 
+  kafka:
+    image: apache/kafka:3.8.1
+    container_name: user-kafka
+    ports:
+      - "${KAFKA_PORT_HOST:-9092}:9092"
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+    restart: unless-stopped
+
+  push-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: user-push-consumer
+    command: ["/app/push-consumer"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_started
+    volumes:
+      # Локальный secrets/firebase-adminsdk.json (не в git): см. secrets/README.md и env.example
+      - ./secrets:/run/secrets:ro
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-user_service}?sslmode=disable"
+      KAFKA_BROKERS: "${KAFKA_BROKERS:-kafka:9092}"
+      KAFKA_TOPIC_CHAT_MESSAGES: "${KAFKA_TOPIC_CHAT_MESSAGES:-chat.messages}"
+      KAFKA_CONSUMER_GROUP: "${KAFKA_CONSUMER_GROUP:-user-mgz-push-consumer}"
+      PUSH_PROVIDER: "${PUSH_PROVIDER:-noop}"
+      # FCM через смонтированный каталог secrets/ (переопределяет возможные значения из .env с относительным путём хоста).
+      GOOGLE_APPLICATION_CREDENTIALS: "/run/secrets/firebase-adminsdk.json"
+      FIREBASE_CREDENTIALS_PATH: "/run/secrets/firebase-adminsdk.json"
+      FIREBASE_CREDENTIALS_JSON: "${FIREBASE_CREDENTIALS_JSON:-}"
+      APNS_KEY_PATH: "${APNS_KEY_PATH:-}"
+      APNS_KEY_PEM: "${APNS_KEY_PEM:-}"
+      APNS_KEY_ID: "${APNS_KEY_ID:-}"
+      APNS_TEAM_ID: "${APNS_TEAM_ID:-}"
+      APNS_TOPIC: "${APNS_TOPIC:-}"
+      APNS_SANDBOX: "${APNS_SANDBOX:-}"
+    restart: unless-stopped
+
 volumes:
   pgdata:
   pgtestdata:
