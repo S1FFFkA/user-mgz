@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	trmmanager "github.com/avito-tech/go-transaction-manager/trm/v2/manager"
 
@@ -78,6 +79,17 @@ func main() {
 		)
 	}
 
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", promhttp.Handler())
+
+	go func() {
+		log.Info("metrics server started", zap.String("port", "9102"))
+
+		if err := http.ListenAndServe(":9102", metricsMux); err != nil {
+			log.Warn("metrics server stopped", zap.Error(err))
+		}
+	}()
+	
 	grpcServer := grpc.NewServer()
 	userv1.RegisterUserServiceServer(grpcServer, usergrpc.NewServer(userSvc, photoSvc, log))
 	userv1.RegisterPushTokenServiceServer(grpcServer, pushtokengrpc.NewServer(pushTokenR, log))
